@@ -1,0 +1,9 @@
+Assignment 1:
+40% Consider the discrete-time asset allocation example in section 8.4 of Rao and Jelvis.
+Suppose the single-time-step return of the risky asset as 𝑌_𝑡=𝑎, 𝑝𝑟𝑜𝑏=𝑝,  𝑎𝑛𝑑 𝑏, 𝑝𝑟𝑜𝑏=(1−𝑝).
+Suppose that T =10, use the TD method to find the Q function, and hence the optimal strategy.
+
+marking scheme:
+1. docstring is a must, otherwise subgrade deducted (google style docstring)
+2. code should be comment and understandable
+3. contains test cases to prove solution
