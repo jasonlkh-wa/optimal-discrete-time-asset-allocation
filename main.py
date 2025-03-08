@@ -5,6 +5,7 @@ import print_utils
 import matplotlib.pyplot as plt
 from logger import update_logger, logger, LogLevel
 import logging
+from typing import Optional
 
 
 @click.command()
@@ -52,7 +53,7 @@ import logging
     "--epoch",
     "n_epoch",
     type=int,
-    default=1000,
+    default=None,
     show_default=True,
     help="Number of epochs",
 )
@@ -82,7 +83,7 @@ def main(
     probability_of_yield_a: float,
     yield_r: float,
     total_turns: int,
-    n_epoch: int,
+    n_epoch: Optional[int],
     alpha: float,
     epsilon: float,
     log_level: LogLevel,
@@ -100,7 +101,7 @@ def main(
     environment.show_environment()
 
     avg_return_of_epochs = []
-    # for epoch in range(n_epoch):
+
     epoch = 0
     while True:
         logger.info(f"{print_utils.rule}\nEpoch: {epoch}")
@@ -113,10 +114,12 @@ def main(
         )
         if environment.agent.is_optimal_strategy():
             logger.info("Optimal strategy found!")
-            # break
-        else:
-            epoch += 1
-        if epoch == 10_000:
+            if n_epoch is None:
+                break
+
+        epoch += 1
+
+        if n_epoch is not None and epoch == n_epoch:
             break
 
         # CR kleung: have a plot of optimal policy rate and a plot of policy selected per turn per run
