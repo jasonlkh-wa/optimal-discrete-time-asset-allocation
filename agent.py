@@ -4,6 +4,8 @@ from abstract_types import (
     StateActionValueDict,
     Allocation,
     TurnNumber,
+    Wealth,
+    Mode,
 )
 import random
 from logger import logger
@@ -16,19 +18,25 @@ class Agent:
     alpha: float
     default_value: float
 
-    def __init__(
-        self, total_turns: int, epsilon: float, alpha, default_value: float = 1.0
-    ):
-        self.state_action_value_dict = {
-            turn: {action: default_value for action in self.possible_actions}
-            for turn in range(total_turns)
-        }
+    def __init__(self, epsilon: float, alpha, default_value: float = 1.0):
+        self.state_action_value_dict = {}
         self.epsilon = epsilon
         self.alpha = alpha
         self.default_value = default_value  # default value of Q(s, a)
 
-    def get_greedy_allocation(self, turn_number: TurnNumber) -> Allocation:
-        action_value_dict = self.state_action_value_dict[turn_number]
+    def get_greedy_allocation(
+        self,
+        turn_number: TurnNumber,
+        wealth: Wealth,
+        mode: Mode,
+    ) -> Allocation:
+        # inialize action_value_dict if not present
+        if mode == "Prod" and (turn_number, wealth) not in self.state_action_value_dict:
+            self.state_action_value_dict[(turn_number, wealth)] = {
+                action: self.default_value for action in self.possible_actions
+            }
+
+        action_value_dict = self.state_action_value_dict[(turn_number, wealth)]
         # logger.debug(action_value_dict) # CR-soon kleung: consider removing this line
         max_value = max(action_value_dict.values())
 
@@ -39,27 +47,31 @@ class Agent:
 
         return random.choice(possible_actions)
 
-    def get_allocation(self, turn_number: TurnNumber) -> tuple[Allocation, bool]:
-        if random.random() < self.epsilon:
+    def get_allocation(
+        self, turn_number: TurnNumber, wealth: Wealth, all_greedy: bool = False
+    ) -> tuple[Allocation, bool]:
+        if not all_greedy and random.random() < self.epsilon:
             return random.choice(self.possible_actions), False
         else:
-            return self.get_greedy_allocation(turn_number=turn_number), True
+            return self.get_greedy_allocation(
+                turn_number=turn_number, wealth=wealth, mode="Prod"
+            ), True
 
     def debug_state_action_value_dict(self, show_non_default_only: bool):
-        for turn, action_value_dict in self.state_action_value_dict.items():
+        for (turn, wealth), action_value_dict in self.state_action_value_dict.items():
             if show_non_default_only:
                 action_value_dict = {
                     action: value
                     for action, value in action_value_dict.items()
                     if value != self.default_value
                 }
-            logger.debug(f"Turn: {turn}")
+            logger.debug(f"Turn: {turn} Wealth: {wealth}")
 
             for action, value in action_value_dict.items():
                 logger.debug(f"Action: {action}, Value: {value}")
             logger.debug("\n")
 
-    def is_optimal_strategy(self, optimal_strategy=0):
+    def is_optimal_strategy(self, optimal_strategy):
         for _, action_value_dict in self.state_action_value_dict.items():
             if (
                 max(action_value_dict.items(), key=lambda x: x[1])[0]

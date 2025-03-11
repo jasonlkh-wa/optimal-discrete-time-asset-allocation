@@ -52,7 +52,6 @@ class Environment:
         self.probability_of_yield_b = 1 - probability_of_yield_1
         self.total_turns = total_turns
         self.agent = Agent(
-            total_turns=total_turns,
             epsilon=epsilon,
             alpha=alpha,
             default_value=(1 + yield_r) ** total_turns,
@@ -87,3 +86,17 @@ class Environment:
         return risky_wealth * (
             1 + self.get_random_return_of_risky_asset()
         ) + riskless_wealth * (1 + self.yield_r)
+
+    def calculate_optimal_strategy_and_expected_return(self) -> tuple[float, float]:
+        max_value = 0
+        max_value_action: float = self.agent.possible_actions[0]
+        for allocation in self.agent.possible_actions:
+            expected_return = (
+                self.yield_a * self.probability_of_yield_a
+                + self.yield_b * self.probability_of_yield_b
+            ) * allocation + self.yield_r * (1 - allocation)
+            if expected_return > max_value:
+                max_value = expected_return
+                max_value_action = allocation
+
+        return (max_value_action, (1 + max_value) ** self.total_turns)

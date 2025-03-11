@@ -1,7 +1,7 @@
 from typing import Optional
 from environment import Environment
 from agent import Agent
-from abstract_types import TurnNumber, Allocation, StateActionValueDict
+from abstract_types import TurnNumber, Allocation, StateActionValueDict, Mode
 
 
 class State:
@@ -42,7 +42,7 @@ class SingleRunInternalState:
         self.turn_state_dict = {}
         self.current_wealth = wealth
 
-    def simulate_run(self):
+    def forward_step(self, mode: Mode, all_greedy: bool = False):
         """
         Simulate a single run of the environment over a specified number of turns.
 
@@ -66,8 +66,20 @@ class SingleRunInternalState:
         for turn in range(self.total_turns):
             state = State(turn=turn, wealth=self.current_wealth)
 
+            if (
+                mode == "Prod"
+                and (state.turn, state.wealth)
+                not in self.agent.state_action_value_dict.keys()
+            ):
+                self.agent.state_action_value_dict[(state.turn, state.wealth)] = {
+                    action: self.agent.default_value
+                    for action in self.agent.possible_actions
+                }
+
             state.set_allocation_and_is_greedy(
-                *self.agent.get_allocation(turn_number=turn)
+                *self.agent.get_allocation(
+                    turn_number=turn, wealth=state.wealth, all_greedy=all_greedy
+                )
             )
 
             assert (
@@ -99,15 +111,16 @@ class SingleRunInternalState:
                 state.selected_allocation is not None
                 and state.is_greedy_allocation is not None
             )
-            selected_allocation_expected_return = state_action_value_dict[turn][
-                state.selected_allocation
-            ]
+            selected_allocation_expected_return = state_action_value_dict[
+                (turn, state.wealth)
+            ][state.selected_allocation]
 
             if idx == 0:
                 if turn == self.total_turns - 1:
-                    state_action_value_dict[turn][state.selected_allocation] += (
-                        self.agent.alpha
-                        * (self.current_wealth - selected_allocation_expected_return)
+                    state_action_value_dict[(turn, state.wealth)][
+                        state.selected_allocation
+                    ] += self.agent.alpha * (
+                        self.current_wealth - selected_allocation_expected_return
                     )
             else:
                 next_state = self.turn_state_dict[turn + 1]
@@ -116,25 +129,17 @@ class SingleRunInternalState:
                     and next_state.is_greedy_allocation is not None
                 ), "Allocation and is_greedy_allocation should always be set here"
 
-                # XCR kleung: this is prolly wrong, the reward is not considering the Q(t+1, x), it just take the actual reward
-                # CR kleung: reward is now the wealth which is bad because the wealth
-                # will then be considered in the Q function while i want the relative
-                # expected growth of wealth to be considered
-                # CR kleung: actually i may want to do Q(wealth, t, allocation) = reward,
-                # which is wealth * Q'(t, allocation), hence i use the reward divided by
-                # wealth to update the Q'. Store Q' instead of actual Q, actual Q shuold be derived at
-                # run time
-
                 if next_state.is_greedy_allocation:
                     assert (
                         next_state.selected_allocation is not None
                     ), "Next state's allocation should always be set here"
-                    next_state_return = state_action_value_dict[turn + 1][
-                        next_state.selected_allocation
-                    ]
-                    state_action_value_dict[turn][state.selected_allocation] += (
-                        self.agent.alpha
-                        * (next_state_return - selected_allocation_expected_return)
+                    next_state_return = state_action_value_dict[
+                        (turn + 1, next_state.wealth)
+                    ][next_state.selected_allocation]
+                    state_action_value_dict[(turn, state.wealth)][
+                        state.selected_allocation
+                    ] += self.agent.alpha * (
+                        next_state_return - selected_allocation_expected_return
                     )
 
                 else:
@@ -143,6 +148,6 @@ class SingleRunInternalState:
 
         return state_action_value_dict
 
-    def train_one_step(self) -> StateActionValueDict:
-        self.simulate_run()
+    def train_one_step(self, mode: Mode) -> StateActionValueDict:
+        self.forward_step(mode=mode)
         return self.backup_agent_from_turn_state_dict()
