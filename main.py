@@ -1,5 +1,6 @@
 # CR kleung: make test cases of t=2,3,4 for showing the algo works
-# CR kleung: if i can prove t=2 case, i can argue i can update the algo to only select allocation at t0
+# XCR kleung: if i can prove t=2 case, i can argue i can update the algo to only select allocation at t0
+# actually i've done t=10, just add some more notes
 # CR kleung: improve the [is_optimal_strategy] function since now
 #            it's very hard given if i run large t, maybe likelihood of hitting optimal?
 # XCR kleung: add analysis for q* vs q in state-action-value dict (which is E(yield) + 1 ** n_turn)
@@ -100,7 +101,7 @@ plt.rcParams.update(
     type=float,
     default=0.9999,
     show_default=True,
-    help="Epsilon decay multiplier per turn",
+    help="Epsilon decay multiplier per turn, new = old * decay",
 )
 @click.option(
     "--min-epsilon",
@@ -158,9 +159,9 @@ def main(
     else:
         environment: Environment = joblib.load(env_path)
 
-    assert isinstance(environment, Environment), (
-        "Environment cannot be loaded from [env_path]"
-    )
+    assert isinstance(
+        environment, Environment
+    ), "Environment cannot be loaded from [env_path]"
     environment.show_environment()
 
     avg_return_of_epochs = []
@@ -264,7 +265,6 @@ def main(
                 single_run_internal_state.train_one_step(mode="Prod")
             )
 
-        # CR kleung: move them to [InternalState] class
         if not disable_simulation:
             try:
                 assert avg_optimal_action_count_per_run_list is not None

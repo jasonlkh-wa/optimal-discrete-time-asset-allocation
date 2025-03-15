@@ -41,7 +41,6 @@ class Agent:
             }
 
         action_value_dict = self.state_action_value_dict[(turn_number, wealth)]
-        # logger.debug(action_value_dict) # CR-soon kleung: consider removing this line
         max_value = max(action_value_dict.values())
 
         possible_actions = []
@@ -69,6 +68,10 @@ class Agent:
                 logger.debug(f"Action: {action}, Value: {value}")
             logger.debug("\n")
 
+    # CR kleung: improve the [is_optimal_strategy] function since now
+    # it's very hard given if i run large t, maybe likelihood of hitting optimal?
+    # prolly move this to environment and only check paths with optimal strategy selected and
+    # check if those strategies is optimal
     def is_optimal_strategy(self, optimal_strategy):
         for _, action_value_dict in self.state_action_value_dict.items():
             if (

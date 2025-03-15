@@ -48,3 +48,11 @@ def test_calculate_new_wealth_with_random_risk_return(env: Environment):
     assert (
         new_wealth == 1 + (env.yield_a + env.yield_r) / 2
     )  # case when random result = [yield_a] and 0.5 riskless asset
+
+
+def test_calculate_optimal_strategy_and_expected_return(env: Environment):
+    optimal_allocation, expected_return = (
+        env.calculate_optimal_strategy_and_expected_return()
+    )
+    assert optimal_allocation == 1
+    assert expected_return == (1 + env.expected_risky_return()) ** env.total_turns
