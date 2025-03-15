@@ -1,8 +1,7 @@
 # CR kleung: make test cases of t=2,3,4 for showing the algo works
 # XCR kleung: if i can prove t=2 case, i can argue i can update the algo to only select allocation at t0
 # actually i've done t=10, just add some more notes
-# CR kleung: improve the [is_optimal_strategy] function since now
-#            it's very hard given if i run large t, maybe likelihood of hitting optimal?
+
 # XCR kleung: add analysis for q* vs q in state-action-value dict (which is E(yield) + 1 ** n_turn)
 #               -> done, add some notes about when there are more states, more states are
 #                  unexplored and cause the large percent diff
