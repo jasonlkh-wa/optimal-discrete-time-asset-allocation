@@ -91,7 +91,7 @@ def test_get_allocation_with_greedy_epsilon_and_non_absoulte_best_action(
 
 def test_debug_state_action_value_dict(base_agent: Agent, caplog):
     with caplog.at_level(logging.DEBUG, logger=logger.name):
-        base_agent.debug_state_action_value_dict(show_non_default_only=False)
+        base_agent.debug_state_action_value_dict()
 
         assert "Turn: 0 Wealth: 1" in caplog.text
         assert "Action: 0, Value: 0" in caplog.text

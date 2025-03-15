@@ -1,19 +1,35 @@
 # CR kleung: make test cases of t=2,3,4 for showing the algo works
+# CR kleung: if i can prove t=2 case, i can argue i can update the algo to only select allocation at t0
 # CR kleung: improve the [is_optimal_strategy] function since now
-#            it's very hard given if i run large t
-# CR kleung: something to export value functions for inspection and reuse
-# CR kleung: setup breakpoints for debugging and learn about how to use
-# CR kleung: add analysis for q* vs q in state-action-value dict (which is E(yield) + 1 ** n_turn)
+#            it's very hard given if i run large t, maybe likelihood of hitting optimal?
+# XCR kleung: add analysis for q* vs q in state-action-value dict (which is E(yield) + 1 ** n_turn)
+#               -> done, add some notes about when there are more states, more states are
+#                  unexplored and cause the large percent diff
 from environment import Environment
 import click
 from single_run_internal_state import SingleRunInternalState
 import print_utils
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+from matplotlib.lines import Line2D
+from numpy.typing import ArrayLike
 from logger import update_logger, logger, LogLevel
 import logging
-from typing import Optional, Tuple
+from typing import Optional
+import time
+import datetime
+import joblib
+import os
+import textwrap
+
+plt.rcParams.update(
+    {
+        "axes.titlesize": 8,
+        "axes.labelsize": 8,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+    }
+)
 
 
 @click.command()
@@ -87,9 +103,29 @@ from typing import Optional, Tuple
     help="Epsilon decay multiplier per turn",
 )
 @click.option(
+    "--min-epsilon",
+    type=float,
+    default=0.2,
+    show_default=True,
+    help="Minimum epsilon of TD-0 algorithm after applying decay",
+)
+@click.option(
     "--log-level",
     type=click.Choice(list(logging._nameToLevel.keys()), case_sensitive=False),
     default="INFO",
+)
+@click.option(
+    "--env-path",
+    type=click.Path(exists=True),
+    help="Import environment from a file",
+)
+@click.option(
+    "--disable-train",
+    is_flag=True,
+    help="Disable agent training steps",
+)
+@click.option(
+    "--disable-simulation", is_flag=True, help="Disable agent simulation tests and plot"
 )
 def main(
     yield_a: float,
@@ -101,132 +137,286 @@ def main(
     alpha: float,
     epsilon: float,
     epsilon_decay: float,
+    min_epsilon: float,
     log_level: LogLevel,
+    env_path: Optional[os.PathLike],
+    disable_train: bool,
+    disable_simulation: bool,
 ):
     update_logger(logger, log_level)
-    environment = Environment(
-        yield_a=yield_a,
-        yield_b=yield_b,
-        yield_r=yield_r,
-        probability_of_yield_1=probability_of_yield_a,
-        total_turns=total_turns,
-        alpha=alpha,
-        epsilon=epsilon,
+
+    if env_path is None:
+        environment = Environment(
+            yield_a=yield_a,
+            yield_b=yield_b,
+            yield_r=yield_r,
+            probability_of_yield_1=probability_of_yield_a,
+            total_turns=total_turns,
+            alpha=alpha,
+            epsilon=epsilon,
+        )
+    else:
+        environment: Environment = joblib.load(env_path)
+
+    assert isinstance(environment, Environment), (
+        "Environment cannot be loaded from [env_path]"
     )
     environment.show_environment()
 
     avg_return_of_epochs = []
-    returns_of_epochs = []
+    avg_optimal_action_count_per_run_list = []
     optimal_stratgy, optimal_expected_return = (
         environment.calculate_optimal_strategy_and_expected_return()
     )
 
-    axes: list[Axes]
-    plt.ion()
-    _fig, axes = plt.subplots(1, 3, figsize=(12, 5))
+    # Initialize variables for surpress type hinting
+    epsilon_values: Optional[list[float]] = None
+    axes_dict: Optional[dict[str, Axes]] = None
+    q_function_diffs: Optional[list[float]] = None
+    optimal_expected_return_line: Optional[Line2D] = None
+    average_return_line: Optional[Line2D] = None
+    epsilon_line: Optional[Line2D] = None
+    optimal_action_count_line: Optional[Line2D] = None
+    q_function_diff_line: Optional[Line2D] = None
 
-    axes_dict = {
-        "average_return_ax": axes[0],
-        "epsilon_ax": axes[1],
-        "alpha_ax": axes[2],
-    }
+    # We don't initialize graphs if simulation is disabled to save resources
+    if not disable_simulation:
+        axes: list[list[Axes]]
+        plt.ion()
+        fig, axes = plt.subplots(2, 2, figsize=(12, 5))
+        fig.tight_layout(pad=5)
 
-    axes[0].set_xlabel("Epoch")
-    axes_dict["average_return_ax"].set_ylabel("Average Return")
-    axes_dict["average_return_ax"].set_title("Average return over epochs")
-    (average_return_line,) = axes_dict["average_return_ax"].plot([], [])
-    (optimal_expected_return_line,) = axes_dict["average_return_ax"].plot(
-        [], [], label="optimal", color="r"
-    )
-    axes_dict["average_return_ax"].legend()
+        axes_dict = {
+            "average_return_ax": axes[0][0],
+            "optimal_action_count_ax": axes[0][1],
+            "q_function_diff_ax": axes[1][0],
+            "epsilon_ax": axes[1][1],
+        }
 
-    axes_dict["epsilon_ax"].set_xlabel("Epoch")
-    axes_dict["epsilon_ax"].set_ylabel("Episilon")
-    axes_dict["epsilon_ax"].set_title("Epsilon over epochs")
-    (epsilon_line,) = axes_dict["epsilon_ax"].plot([], [], label="Epsilon", color="r")
+        # Average return plot
+        update_ax_properties(
+            axes_dict["average_return_ax"],
+            x_label="Epoch",
+            y_label="Average Return",
+            title="Average return over epochs",
+        )
 
-    axes_dict["alpha_ax"].set_xlabel("Epoch")
-    axes_dict["alpha_ax"].set_ylabel("Alpha")
-    axes_dict["alpha_ax"].set_title("Alpha over epochs")
-    (alpha_line,) = axes_dict["alpha_ax"].plot([], [], label="Alpha", color="b")
+        (average_return_line,) = axes_dict["average_return_ax"].plot([], [])
+        (optimal_expected_return_line,) = axes_dict["average_return_ax"].plot(
+            [], [], label="optimal", color="r"
+        )
+        axes_dict["average_return_ax"].legend()
 
-    epoch = 0
-    epsilon_values = []
-    alpha_values = []
+        # Optimal action count plot
+        update_ax_properties(
+            axes_dict["optimal_action_count_ax"],
+            x_label="Epoch",
+            y_label="Optimal Action Count",
+            title=wrap_title("Average optimal action count over epochs", width=40),
+        )
+
+        (optimal_action_count_line,) = axes_dict["optimal_action_count_ax"].plot(
+            [], [], color="b"
+        )
+
+        # Optimal q function vs current q function plot
+        update_ax_properties(
+            axes_dict["q_function_diff_ax"],
+            x_label="Epoch",
+            y_label="Average percent difference",
+            title=wrap_title(
+                "Average percent difference of Q function against Q* function over epochs",
+                width=40,
+            ),
+        )
+        (q_function_diff_line,) = axes_dict["q_function_diff_ax"].plot(
+            [], [], color="b"
+        )
+
+        # Epsilon plot
+        update_ax_properties(
+            axes_dict["epsilon_ax"],
+            x_label="Epoch",
+            y_label="Epsilon",
+            title="Epsilon over epochs",
+        )
+        (epsilon_line,) = axes_dict["epsilon_ax"].plot(
+            [], [], label="Epsilon", color="r"
+        )
+
+        q_function_diffs = []
+        epsilon_values = []
 
     epoch = 0
     while True:
+        # If [n_epoch] is not defined, train agent until reaching the optimal strategy
         if n_epoch is not None and epoch == n_epoch:
             break
 
-        logger.info(f"{print_utils.rule}\nEpoch: {epoch} {epsilon=}")
-        environment.agent.debug_state_action_value_dict(show_non_default_only=True)
+        logger.info(
+            f"{print_utils.rule}\nEpoch: {epoch} {epsilon=} {alpha=} {environment.calculate_average_q_function_percent_diff(environment.agent.state_action_value_dict)=}"
+        )
+        environment.agent.debug_state_action_value_dict()
         single_run_internal_state = SingleRunInternalState(environment=environment)
 
-        environment.agent.state_action_value_dict = (
-            single_run_internal_state.train_one_step(mode="Prod")
-        )
-
-        # CR kleung: have a plot of optimal policy rate and a plot of policy selected per turn per run
-        # Simulate return with this policy
-        test_returns = []
-        total_test_run = 100
-        for _ in range(total_test_run):
-            single_run_internal_state = SingleRunInternalState(environment=environment)
-
-            new_return = single_run_internal_state.forward_step(
-                mode="Prod", all_greedy=True
+        if not disable_train:
+            environment.agent.state_action_value_dict = (
+                single_run_internal_state.train_one_step(mode="Prod")
             )
-            test_returns.append(new_return)
 
-        # Calculate and append average return of this epoch
-        avg_return = sum(test_returns) / len(test_returns)
-        logger.debug(f"Average return: {avg_return} of epoch {epoch}")
-        avg_return_of_epochs.append(avg_return)
-        returns_of_epochs.append(test_returns)
+        # CR kleung: move them to [InternalState] class
+        if not disable_simulation:
+            try:
+                assert avg_optimal_action_count_per_run_list is not None
+                assert q_function_diffs is not None
+                assert epsilon_values is not None
+                assert axes_dict is not None
+                assert optimal_expected_return_line is not None
+                assert average_return_line is not None
+                assert epsilon_line is not None
+                assert optimal_action_count_line is not None
+                assert q_function_diff_line is not None
+            except AssertionError as e:
+                logger.error("Unexpected plot variable being None")
+                raise e
 
-        # Append epsilon and alpha value
-        epsilon_values.append(epsilon)
-        alpha_values.append(environment.agent.alpha)
+            avg_return, avg_optimal_action_count_per_run = run_test_simulation(
+                environment=environment,
+                optimal_stratgy=optimal_stratgy,
+                n_run=100,
+            )
 
-        average_return_line.set_xdata(range(epoch + 1))
-        average_return_line.set_ydata(avg_return_of_epochs)
-        optimal_expected_return_line.set_xdata(range(epoch + 1))
-        optimal_expected_return_line.set_ydata(
-            [optimal_expected_return for _ in range(len(avg_return_of_epochs))]
-        )
-        axes_dict["average_return_ax"].relim()
-        axes_dict["average_return_ax"].autoscale_view()
+            # Calculate and append average return of this epoch
+            logger.debug(f"Average return: {avg_return} of epoch {epoch}")
+            avg_return_of_epochs.append(avg_return)
+            avg_optimal_action_count_per_run_list.append(
+                avg_optimal_action_count_per_run
+            )
 
-        epsilon_line.set_xdata(range(epoch + 1))
-        epsilon_line.set_ydata(epsilon_values)
+            # Append epsilon value
+            epsilon_values.append(epsilon)
 
-        axes_dict["epsilon_ax"].relim()
-        axes_dict["epsilon_ax"].autoscale_view()
+            # Update average return plot
+            update_realtime_graph(
+                axes_dict["average_return_ax"],
+                average_return_line,
+                xdata=range(epoch + 1),
+                ydata=avg_return_of_epochs,
+            )
+            # Update optimal expected return plot
+            update_realtime_graph(
+                axes_dict["average_return_ax"],
+                optimal_expected_return_line,
+                xdata=range(epoch + 1),
+                ydata=[
+                    optimal_expected_return for _ in range(len(avg_return_of_epochs))
+                ],
+            )
 
-        alpha_line.set_xdata(range(epoch + 1))
-        alpha_line.set_ydata(alpha_values)
-        axes_dict["alpha_ax"].relim()
-        axes_dict["alpha_ax"].autoscale_view()
+            # Update optimal action count plot
+            update_realtime_graph(
+                axes_dict["optimal_action_count_ax"],
+                optimal_action_count_line,
+                xdata=range(epoch + 1),
+                ydata=avg_optimal_action_count_per_run_list,
+            )
 
-        # refresh graph
-        plt.draw()
-        plt.pause(1e-10)
+            # Update optimal action count plot
+            q_function_diffs.append(
+                environment.calculate_average_q_function_percent_diff(
+                    environment.agent.state_action_value_dict
+                )
+            )
+            update_realtime_graph(
+                axes_dict["q_function_diff_ax"],
+                q_function_diff_line,
+                xdata=range(epoch + 1),
+                ydata=q_function_diffs,
+            )
+
+            # Update epsilon plot
+            update_realtime_graph(
+                axes_dict["epsilon_ax"],
+                epsilon_line,
+                xdata=range(epoch + 1),
+                ydata=epsilon_values,
+            )
+
+            # refresh graph
+            plt.draw()
+            plt.pause(1e-5)
 
         if environment.agent.is_optimal_strategy(optimal_strategy=optimal_stratgy):
             logger.info("Optimal strategy found!")
             if n_epoch is None:
                 break
 
-        epsilon *= epsilon_decay
-        environment.agent.alpha = max(environment.agent.alpha * epsilon_decay, 0.1)
+        # epsilon decay
+        epsilon = max(epsilon * epsilon_decay, min_epsilon)
         epoch += 1
 
-    plt.ioff()
-    plt.show()
-    print(environment.agent.state_action_value_dict)
-    print(returns_of_epochs[-1])
-    print(f"{yield_a=},{yield_b=},{probability_of_yield_a=},{yield_r=}")
+        logger.info(
+            f"{environment.calculate_average_q_function_percent_diff(environment.agent.state_action_value_dict)=}"
+        )
+
+    # Show final graph to avoid realtime graph closing automatically
+    if not disable_simulation:
+        plt.ioff()
+        plt.show()
+
+    # Export environment
+    environment.export_environment(
+        f"./data/env_{datetime.datetime.today().strftime('%Y%m%d')}_{time.time()}_total_turns_{environment.total_turns}.joblib"
+    )
+
+
+def run_test_simulation(
+    environment: Environment, optimal_stratgy: float, n_run: int
+) -> tuple[float, float]:
+    test_returns = []
+    optimal_strategy_count = 0
+    for _ in range(n_run):
+        single_run_internal_state = SingleRunInternalState(environment=environment)
+
+        new_return = single_run_internal_state.forward_step(
+            mode="Prod", all_greedy=True
+        )
+        optimal_strategy_count += sum(
+            [
+                1 if state.selected_allocation == optimal_stratgy else 0
+                for state in single_run_internal_state.turn_state_dict.values()
+            ]
+        )
+        test_returns.append(new_return)
+
+    avg_return = sum(test_returns) / n_run
+    avg_optimal_action_count_per_run = optimal_strategy_count / n_run
+    return (avg_return, avg_optimal_action_count_per_run)
+
+
+def update_realtime_graph(ax: Axes, line: Line2D, xdata: ArrayLike, ydata: ArrayLike):
+    line.set_xdata(xdata)
+    line.set_ydata(ydata)
+    ax.relim()
+    ax.autoscale_view()
+
+
+def update_ax_properties(
+    ax: Axes,
+    title: str,
+    x_label: str,
+    y_label: str,
+):
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_title(
+        title,
+        fontsize=8,
+    )
+
+
+def wrap_title(title: str, width=40) -> str:
+    return "\n".join(textwrap.wrap(title, width=width))
 
 
 if __name__ == "__main__":

@@ -19,12 +19,12 @@ class State:
     def set_allocation_and_is_greedy(
         self, allocation: Allocation, is_greedy_allocation: bool
     ):
-        assert (
-            self.selected_allocation is None
-        ), "Allocation already set, this should never be reached"
-        assert (
-            self.is_greedy_allocation is None
-        ), "[is_greedy_allocation] already set, this should never be reached"
+        assert self.selected_allocation is None, (
+            "Allocation already set, this should never be reached"
+        )
+        assert self.is_greedy_allocation is None, (
+            "[is_greedy_allocation] already set, this should never be reached"
+        )
 
         self.selected_allocation = allocation
         self.is_greedy_allocation = is_greedy_allocation
@@ -42,7 +42,7 @@ class SingleRunInternalState:
         self.turn_state_dict = {}
         self.current_wealth = wealth
 
-    def forward_step(self, mode: Mode, all_greedy: bool = False):
+    def forward_step(self, mode: Mode, all_greedy: bool = False) -> float:
         """
         Simulate a single run of the environment over a specified number of turns.
 
@@ -72,7 +72,7 @@ class SingleRunInternalState:
                 not in self.agent.state_action_value_dict.keys()
             ):
                 self.agent.state_action_value_dict[(state.turn, state.wealth)] = {
-                    action: self.agent.default_value
+                    action: self.current_wealth
                     for action in self.agent.possible_actions
                 }
 
@@ -130,9 +130,9 @@ class SingleRunInternalState:
                 ), "Allocation and is_greedy_allocation should always be set here"
 
                 if next_state.is_greedy_allocation:
-                    assert (
-                        next_state.selected_allocation is not None
-                    ), "Next state's allocation should always be set here"
+                    assert next_state.selected_allocation is not None, (
+                        "Next state's allocation should always be set here"
+                    )
                     next_state_return = state_action_value_dict[
                         (turn + 1, next_state.wealth)
                     ][next_state.selected_allocation]

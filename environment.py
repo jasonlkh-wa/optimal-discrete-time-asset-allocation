@@ -1,7 +1,10 @@
 import random
 from print_utils import print_box
 from agent import Agent
-from abstract_types import Allocation
+from abstract_types import Allocation, StateActionValueDict
+import joblib
+import numpy as np
+from typing import cast
 
 
 class Environment:
@@ -54,7 +57,12 @@ class Environment:
         self.agent = Agent(
             epsilon=epsilon,
             alpha=alpha,
-            default_value=(1 + yield_r) ** total_turns,
+        )
+
+    def expected_risky_return(self):
+        return (
+            self.yield_a * self.probability_of_yield_a
+            + self.yield_b * self.probability_of_yield_b
         )
 
     @print_box()
@@ -100,3 +108,33 @@ class Environment:
                 max_value_action = allocation
 
         return (max_value_action, (1 + max_value) ** self.total_turns)
+
+    def export_environment(self, filename: str):
+        joblib.dump(self, filename)
+
+    def calculate_average_q_function_percent_diff(
+        self, state_action_value_dict: StateActionValueDict
+    ):
+        """Given a state action value dictionary, calculate the average percent difference
+        between the current Q function and the optimal Q function."""
+        _, optimal_return = self.calculate_optimal_strategy_and_expected_return()
+
+        percent_diff_arr = np.array([])  # [optimal q* - q] / optimal q*
+
+        for (turn, wealth), action_value_dict in state_action_value_dict.items():
+            for allocation, expected_wealth in action_value_dict.items():
+                optimal_q = (
+                    wealth
+                    * (
+                        allocation * (1 + self.expected_risky_return())
+                        + (1 - allocation) * (1 + self.yield_r)
+                    )
+                    * (1 + optimal_return) ** (self.total_turns - turn - 1)
+                )
+
+                percent_diff_arr = np.append(
+                    percent_diff_arr,
+                    [abs(optimal_q - expected_wealth) / optimal_q],
+                )
+
+        return cast(float, np.mean(percent_diff_arr))

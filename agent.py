@@ -16,13 +16,15 @@ class Agent:
     state_action_value_dict: StateActionValueDict
     epsilon: float
     alpha: float
-    default_value: float
 
-    def __init__(self, epsilon: float, alpha, default_value: float = 1.0):
+    def __init__(
+        self,
+        epsilon: float,
+        alpha,
+    ):
         self.state_action_value_dict = {}
         self.epsilon = epsilon
         self.alpha = alpha
-        self.default_value = default_value  # default value of Q(s, a)
 
     def get_greedy_allocation(
         self,
@@ -33,7 +35,9 @@ class Agent:
         # inialize action_value_dict if not present
         if mode == "Prod" and (turn_number, wealth) not in self.state_action_value_dict:
             self.state_action_value_dict[(turn_number, wealth)] = {
-                action: self.default_value for action in self.possible_actions
+                # taking the current wealth as the default q value
+                action: wealth
+                for action in self.possible_actions
             }
 
         action_value_dict = self.state_action_value_dict[(turn_number, wealth)]
@@ -57,14 +61,8 @@ class Agent:
                 turn_number=turn_number, wealth=wealth, mode="Prod"
             ), True
 
-    def debug_state_action_value_dict(self, show_non_default_only: bool):
+    def debug_state_action_value_dict(self):
         for (turn, wealth), action_value_dict in self.state_action_value_dict.items():
-            if show_non_default_only:
-                action_value_dict = {
-                    action: value
-                    for action, value in action_value_dict.items()
-                    if value != self.default_value
-                }
             logger.debug(f"Turn: {turn} Wealth: {wealth}")
 
             for action, value in action_value_dict.items():

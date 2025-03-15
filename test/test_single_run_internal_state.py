@@ -44,7 +44,7 @@ def simple_single_run_internal_state(simple_environment):
 def test_simulate_run_with_all_greedy_calculation(
     simple_environment, simple_single_run_internal_state
 ):
-    simple_single_run_internal_state.simulate_run(mode="Test")
+    simple_single_run_internal_state.forward_step(mode="Test")
 
     assert (
         len(simple_single_run_internal_state.turn_state_dict)
@@ -72,13 +72,12 @@ def test_simulate_run_with_all_greedy_calculation(
         )
 
 
-# CR kleung: not here, but all turn may need to break into (turn, wealth)
 def test_train_one_step(simple_environment, simple_single_run_internal_state):
     new_state_action_value_dict = simple_single_run_internal_state.train_one_step(
         mode="Test"
     )
     final_wealth = simple_single_run_internal_state.current_wealth
-    for (turn, wealth), action_value_dict in new_state_action_value_dict.items():
+    for (turn, _), action_value_dict in new_state_action_value_dict.items():
         assert action_value_dict[0] == 0
         if turn == simple_environment.total_turns - 1:
             assert (
