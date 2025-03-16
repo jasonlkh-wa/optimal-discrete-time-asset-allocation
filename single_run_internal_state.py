@@ -1,3 +1,21 @@
+"""
+A run means an epoch of the training/simulation with [total_turns] turns of the asset
+allocatoin environment.
+
+This file contains the implementation of the SingleRunInternalState class, which is used
+internally by the Environment class to simulate a single run of the environment over a
+specified number of turns.
+
+The SingleRunInternalState class is responsible for simulating a single run of the
+environment over a specified number of turns. It uses the Agent's policy to determine the
+allocation of assets for each turn, and updates the current wealth based on the allocation
+and the random return from the risky asset. It also stores the state of each turn in a
+dictionary for future reference.
+
+The SingleRunInternalState class also contains methods to train the Agent using the TD
+update, and to get the allocation of assets based on the Agent's policy.
+"""
+
 from typing import Optional
 from environment import Environment
 from agent import Agent
@@ -5,12 +23,41 @@ from abstract_types import TurnNumber, Allocation, StateActionValueDict, Mode
 
 
 class State:
+    """
+    Class to represent the state of the environment at a single turn.
+
+    The state of the environment at a single turn is represented by the current turn
+    number, the current wealth, the selected allocation of assets, and whether the
+    allocation was selected greedily.
+
+    Attributes:
+        turn: TurnNumber
+            The current turn number.
+        wealth: float
+            The current wealth.
+        selected_allocation: Optional[Allocation]
+            The allocation of assets selected by the Agent's policy.
+        is_greedy_allocation: Optional[bool]
+            Whether the allocation was selected greedily.
+    """
+
     turn: TurnNumber
     wealth: float
     selected_allocation: Optional[Allocation]
     is_greedy_allocation: Optional[bool]
 
     def __init__(self, turn: int, wealth: float):
+        """
+        Initialize the state with the given turn and wealth.
+
+        Parameters
+        ----------
+        turn : int
+            The current turn number.
+        wealth : float
+            The current wealth.
+        """
+
         self.turn = turn
         self.wealth = wealth
         self.selected_allocation = None
@@ -18,7 +65,22 @@ class State:
 
     def set_allocation_and_is_greedy(
         self, allocation: Allocation, is_greedy_allocation: bool
-    ):
+    ) -> None:
+        """
+        Set the allocation and greediness status for the current state.
+
+        Parameters
+        ----------
+        allocation : Allocation
+            The allocation of assets selected by the Agent's policy.
+        is_greedy_allocation : bool
+            Whether the allocation was selected greedily.
+
+        Asserts
+        -------
+        AssertionError
+            If the allocation or is_greedy_allocation is already set.
+        """
         assert self.selected_allocation is None, (
             "Allocation already set, this should never be reached"
         )
@@ -31,11 +93,49 @@ class State:
 
 
 class SingleRunInternalState:
+    """
+    The SingleRunInternalState class is used to store the state of a single run (epoch) of the
+    environment. It contains the state-action value dictionary, the total number of
+    turns, and a dictionary of states for each turn.
+
+    Attributes
+    ----------
+    agent : Agent
+        The agent used in the environment.
+    total_turns : int
+        The total number of turns in the environment.
+    turn_state_dict : dict[TurnNumber, State]
+        A dictionary of states for each turn.
+    """
+
     agent: Agent
     total_turns: int
     turn_state_dict: dict[TurnNumber, State]
 
     def __init__(self, environment: Environment, wealth: float = 1.0):
+        """
+        Initialize the SingleRunInternalState object.
+
+        Parameters
+        ----------
+        environment : Environment
+            The Environment object.
+        wealth : float, optional
+            The initial wealth of the agent. Defaults to 1.0.
+
+        Attributes
+        ----------
+        environment : Environment
+            The Environment object.
+        agent : Agent
+            The Agent object.
+        total_turns : int
+            The total number of turns in the environment.
+        turn_state_dict : dict[TurnNumber, State]
+            A dictionary of states for each turn.
+        current_wealth : float
+            The current wealth of the agent.
+        """
         self.environment = environment
         self.agent = environment.agent
         self.total_turns = environment.total_turns
@@ -71,6 +171,7 @@ class SingleRunInternalState:
                 and (state.turn, state.wealth)
                 not in self.agent.state_action_value_dict.keys()
             ):
+                # Initialize the state-action value dictionary, disale when the mode is ["Test"]
                 self.agent.state_action_value_dict[(state.turn, state.wealth)] = {
                     action: self.current_wealth
                     for action in self.agent.possible_actions
@@ -94,12 +195,41 @@ class SingleRunInternalState:
                 )
             )
 
+            # Store the state in the turn_state_dict
             self.turn_state_dict[turn] = state
 
         return self.current_wealth
 
     def backup_agent_from_turn_state_dict(self) -> StateActionValueDict:
-        def get_reversed_turn_numbers(turn_state_dict: dict[TurnNumber, State]):
+        """
+        Back up the agent's state-action value dictionary using the TD update.
+        This function is expected to return the new action value dictionary to be
+        passed back to the [Agent] class
+
+        The update is defined as:
+        Q(s_t, a_t) = Q(s_t, a_t) + alpha * (Q(s_{t+1}, a_{t+1}) - Q(s_t, a_t))
+
+        The TD update is applied in reverse order of the turns, i.e. from the last turn
+        to the first turn. For each turn, the function:
+        1. If the current turn is the last turn, updates the expected return of the selected
+        allocation using the TD update with the current wealth as the target.
+        2. Otherwise, updates the expected return of the selected allocation using the TD update
+        with the expected return of the next state as the target, if the next state is selected
+        greedily. Skip backup if the next state is not selected greedily (i.e. randomly).
+
+        Asserts:
+            - The selected allocation and is_greedy_allocation of each state must be set.
+            - The next state's allocation and is_greedy_allocation must be set if the next state
+            is selected greedily.
+
+        Returns:
+            StateActionValueDict: The updated state-action value dictionary.
+        """
+
+        def get_reversed_turn_numbers(
+            turn_state_dict: dict[TurnNumber, State],
+        ) -> list[TurnNumber]:
+            """Get a list of reversed turn numbers from the turn_state_dict."""
             return list(reversed(sorted(turn_state_dict.keys())))
 
         state_action_value_dict = self.agent.state_action_value_dict
@@ -115,6 +245,7 @@ class SingleRunInternalState:
                 (turn, state.wealth)
             ][state.selected_allocation]
 
+            # Update the expected return of the last turn
             if idx == 0:
                 if turn == self.total_turns - 1:
                     state_action_value_dict[(turn, state.wealth)][
@@ -129,6 +260,7 @@ class SingleRunInternalState:
                     and next_state.is_greedy_allocation is not None
                 ), "Allocation and is_greedy_allocation should always be set here"
 
+                # Update the expected return of the current turn if the next state is selected greedily
                 if next_state.is_greedy_allocation:
                     assert next_state.selected_allocation is not None, (
                         "Next state's allocation should always be set here"
@@ -150,5 +282,10 @@ class SingleRunInternalState:
         return state_action_value_dict
 
     def train_one_step(self, mode: Mode) -> StateActionValueDict:
+        """Train the agent for one step in the environment.
+        Runs the environment for one step, and then back up the agent's state-action
+
+        Read the [forward_step] and [backup_agent_from_turn_state_dict] functions
+        for detail implementation."""
         self.forward_step(mode=mode)
         return self.backup_agent_from_turn_state_dict()

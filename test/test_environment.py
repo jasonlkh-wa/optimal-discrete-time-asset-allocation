@@ -120,7 +120,6 @@ def test_calculate_average_q_function_percent_diff(env: Environment):
             next_turn_possible_wealth_set.add(wealth * (1 + env.yield_r))
 
         possible_wealth_set = next_turn_possible_wealth_set
-    # print(optimal_state_action_value_dict)
     assert (
         env.calculate_max_q_function_percent_diff(optimal_state_action_value_dict)
         < 1e-4

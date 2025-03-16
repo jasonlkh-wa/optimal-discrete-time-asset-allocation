@@ -5,11 +5,11 @@ from logger import logger
 rule = "-" * 20
 
 
-def print_rule(print_handler: Callable = logger.info, rule_length: int = 20):
+def print_rule(print_handler: Callable = logger.info, rule_length: int = 20) -> None:
     print_handler("-" * rule_length)
 
 
-def print_box(print_handler: Callable = logger.info, rule_length: int = 20):
+def print_box(print_handler: Callable = logger.info, rule_length: int = 20) -> Callable:
     """A decorator that prints a box around the output of a function."""
 
     def decorator(func: Callable):

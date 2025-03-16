@@ -138,6 +138,36 @@ def main(
     disable_train: bool,
     disable_simulation: bool,
 ):
+    """Run TD-0 algorithm on a discrete-time asset allocation problem.
+
+    Risky asset has yields {yield_a, yield_b} with probabilities
+    {probability_of_yield_a, 1 - probability_of_yield_a}. Riskless asset has yield
+    {yield_r}.
+
+    If n_epoch is not provided, the simulation runs until the agent reaches the
+    optimal strategy.
+
+    The final environment is exported to a file under {./data}.
+
+    Args:
+        yield_a (float): Yield of risky asset with probability
+            {probability_of_yield_a}.
+        yield_b (float): Yield of risky asset with probability
+            {1 - probability_of_yield_a}.
+        probability_of_yield_a (float): Probability of {yield_a} of risky asset.
+        yield_r (float): Yield of riskless asset.
+        total_turns (int): Number of turns per epoch.
+        n_epoch (int): Number of epochs.
+        alpha (float): Learning rate of TD-0 algorithm.
+        epsilon (float): Epsilon of TD-0 algorithm.
+        epsilon_decay (float): Epsilon decay multiplier per turn, new = old * decay.
+        min_epsilon (float): Minimum epsilon of TD-0 algorithm after applying decay.
+        log_level (LogLevel): Log level of the logger.
+        env_path (Optional[os.PathLike]): Import environment from a file.
+        disable_train (bool): Disable agent training steps.
+        disable_simulation (bool): Disable agent simulation tests and plot.
+    """
+
     update_logger(logger, log_level)
 
     if env_path is None:
@@ -368,6 +398,20 @@ def main(
 def run_test_simulation(
     environment: Environment, optimal_stratgy: float, n_run: int
 ) -> tuple[float, float]:
+    """
+    Run test simulation.
+
+    This function runs test simulation by making the agent make all greedy allocations
+    and calculates the average return and the average number of optimal actions per run.
+
+    Args:
+        environment: The environment to run the simulation with.
+        optimal_stratgy: The optimal strategy of the environment.
+        n_run: The number of runs to run the simulation.
+
+    Returns:
+        A tuple of two elements (average return, average number of optimal actions per run).
+    """
     test_returns = []
     optimal_strategy_count = 0
     for _ in range(n_run):
@@ -389,7 +433,21 @@ def run_test_simulation(
     return (avg_return, avg_optimal_action_count_per_run)
 
 
-def update_realtime_graph(ax: Axes, line: Line2D, xdata: ArrayLike, ydata: ArrayLike):
+def update_realtime_graph(
+    ax: Axes, line: Line2D, xdata: ArrayLike, ydata: ArrayLike
+) -> None:
+    """
+    Update a line in a real-time graph.
+
+    This function updates a line in a real-time graph by setting the x and y data of the line,
+    and then calling relim() and autoscale_view() to update the view.
+
+    Args:
+        ax: The Axes object of the graph.
+        line: The Line2D object to be updated.
+        xdata: The new x data of the line.
+        ydata: The new y data of the line.
+    """
     line.set_xdata(xdata)
     line.set_ydata(ydata)
     ax.relim()
@@ -401,7 +459,18 @@ def update_ax_properties(
     title: str,
     x_label: str,
     y_label: str,
-):
+) -> None:
+    """
+    Update properties of a matplotlib Axes object.
+
+    This function updates the title, x label and y label of a matplotlib Axes object.
+
+    Args:
+        ax: The Axes object to be updated.
+        title: The new title of the Axes object.
+        x_label: The new x label of the Axes object.
+        y_label: The new y label of the Axes object.
+    """
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(
@@ -411,6 +480,7 @@ def update_ax_properties(
 
 
 def wrap_title(title: str, width=40) -> str:
+    """Wrap a title string to a given width."""
     return "\n".join(textwrap.wrap(title, width=width))
 
 
