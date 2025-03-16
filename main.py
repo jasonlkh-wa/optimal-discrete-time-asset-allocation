@@ -1,10 +1,5 @@
-# CR kleung: make test cases of t=2,3,4 for showing the algo works
-# XCR kleung: if i can prove t=2 case, i can argue i can update the algo to only select allocation at t0
-# actually i've done t=10, just add some more notes
-
-# XCR kleung: add analysis for q* vs q in state-action-value dict (which is E(yield) + 1 ** n_turn)
-#               -> done, add some notes about when there are more states, more states are
-#                  unexplored and cause the large percent diff
+# CR kleung: make test cases of t=2,3,4 for showing the algo works, use stable V (0.05) and stable policy to proof
+# CR kleung: test is ~100% coverage, do documentation and readme
 from environment import Environment
 import click
 from single_run_internal_state import SingleRunInternalState
@@ -53,7 +48,7 @@ plt.rcParams.update(
     "-p",
     "--probability-of-yield-a",
     type=float,
-    default=0.4,
+    default=0.5,
     show_default=True,
     help="Probability of [yield-a] of risky asset",
 )
@@ -158,9 +153,9 @@ def main(
     else:
         environment: Environment = joblib.load(env_path)
 
-    assert isinstance(
-        environment, Environment
-    ), "Environment cannot be loaded from [env_path]"
+    assert isinstance(environment, Environment), (
+        "Environment cannot be loaded from [env_path]"
+    )
     environment.show_environment()
 
     avg_return_of_epochs = []
@@ -223,9 +218,9 @@ def main(
         update_ax_properties(
             axes_dict["q_function_diff_ax"],
             x_label="Epoch",
-            y_label="Average percent difference",
+            y_label="Max percent difference",
             title=wrap_title(
-                "Average percent difference of Q function against Q* function over epochs",
+                "Max percent difference of Q function against Q* function over epochs",
                 width=40,
             ),
         )
@@ -249,12 +244,13 @@ def main(
 
     epoch = 0
     while True:
-        # If [n_epoch] is not defined, train agent until reaching the optimal strategy
+        # If [n_epoch] is not defined, train agent until reaching the optimal
+        # strategy, i.e. selecting the optimal action at every turn greedily
         if n_epoch is not None and epoch == n_epoch:
             break
 
         logger.info(
-            f"{print_utils.rule}\nEpoch: {epoch} {epsilon=} {alpha=} {environment.calculate_average_q_function_percent_diff(environment.agent.state_action_value_dict)=}"
+            f"{print_utils.rule}\nEpoch: {epoch} {epsilon=} {alpha=} {environment.calculate_max_q_function_percent_diff(environment.agent.state_action_value_dict)=}"
         )
         environment.agent.debug_state_action_value_dict()
         single_run_internal_state = SingleRunInternalState(environment=environment)
@@ -322,7 +318,7 @@ def main(
 
             # Update optimal action count plot
             q_function_diffs.append(
-                environment.calculate_average_q_function_percent_diff(
+                environment.calculate_max_q_function_percent_diff(
                     environment.agent.state_action_value_dict
                 )
             )
@@ -345,7 +341,7 @@ def main(
             plt.draw()
             plt.pause(1e-5)
 
-        if environment.agent.is_optimal_strategy(optimal_strategy=optimal_stratgy):
+        if environment.is_optimal_strategy():
             logger.info("Optimal strategy found!")
             if n_epoch is None:
                 break
@@ -355,7 +351,7 @@ def main(
         epoch += 1
 
         logger.info(
-            f"{environment.calculate_average_q_function_percent_diff(environment.agent.state_action_value_dict)=}"
+            f"{environment.calculate_max_q_function_percent_diff(environment.agent.state_action_value_dict)=}"
         )
 
     # Show final graph to avoid realtime graph closing automatically

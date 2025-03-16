@@ -20,13 +20,17 @@ def simple_environment():
     )
     environment.agent.possible_actions = np.array(
         [0, GREEDY_ACTION]
-    )  # adding 0.5 as the possible action for testing
-    # CR-soon kleung: add doc here for how we calculate this dict
+    )  # adding [GREEDY_ACTION] as the possible action for testing
+
+    # The state-action-value dict is initialized by setting the value of all possible states to 0 and the value of the greedy action to 1.
     environment.agent.state_action_value_dict = {
         (
             turn,
             BASE_WEALTH
-            * ((1 + (environment.yield_r + environment.yield_a) / 2) ** turn),
+            * (
+                (1 + (environment.yield_r + environment.expected_risky_return()) / 2)
+                ** turn
+            ),
         ): {
             0: 0,
             GREEDY_ACTION: 1,

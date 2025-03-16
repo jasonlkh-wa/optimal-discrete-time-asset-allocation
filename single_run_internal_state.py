@@ -136,6 +136,7 @@ class SingleRunInternalState:
                     next_state_return = state_action_value_dict[
                         (turn + 1, next_state.wealth)
                     ][next_state.selected_allocation]
+
                     state_action_value_dict[(turn, state.wealth)][
                         state.selected_allocation
                     ] += self.agent.alpha * (

@@ -96,8 +96,3 @@ def test_debug_state_action_value_dict(base_agent: Agent, caplog):
         assert "Turn: 0 Wealth: 1" in caplog.text
         assert "Action: 0, Value: 0" in caplog.text
         assert "Action: 1, Value: 1" in caplog.text
-
-
-def test_is_optimal_strategy(base_agent: Agent):
-    assert base_agent.is_optimal_strategy(optimal_strategy=1)
-    assert not base_agent.is_optimal_strategy(optimal_strategy=0)

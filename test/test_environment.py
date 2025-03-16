@@ -1,5 +1,6 @@
 from environment import Environment
 from collections import Counter
+from abstract_types import StateActionValueDict
 import random
 import pytest
 
@@ -15,6 +16,42 @@ def env() -> Environment:
         alpha=0.1,
         epsilon=0.1,
     )
+
+
+@pytest.fixture
+def state_action_dict_with_all_optimal_action(env: Environment) -> StateActionValueDict:
+    optimal_action_value = {0: 0, 1: 1}
+    optimal_state_action_dict = {}
+    possible_wealth_set = {1}
+    for turn in range(env.total_turns):
+        next_turn_possible_wealth_set = set()
+        for wealth in possible_wealth_set:
+            optimal_state_action_dict[(turn, wealth)] = optimal_action_value
+
+            next_turn_possible_wealth_set.add(wealth * (1 + env.yield_a))
+            next_turn_possible_wealth_set.add(wealth * (1 + env.yield_b))
+
+        possible_wealth_set = next_turn_possible_wealth_set
+    return optimal_state_action_dict
+
+
+@pytest.fixture
+def state_action_dict_with_all_suboptimal_action(
+    env: Environment,
+) -> StateActionValueDict:
+    suboptimal_state_action_dict = {}
+    suboptimal_action_value = {0: 1, 1: 0}
+    possible_wealth_set = {1}
+    for turn in range(env.total_turns):
+        next_turn_possible_wealth_set = set()
+        for wealth in possible_wealth_set:
+            suboptimal_state_action_dict[(turn, wealth)] = suboptimal_action_value
+
+            next_turn_possible_wealth_set.add(wealth * (1 + env.yield_a))
+            next_turn_possible_wealth_set.add(wealth * (1 + env.yield_b))
+
+        possible_wealth_set = next_turn_possible_wealth_set
+    return suboptimal_state_action_dict
 
 
 def test_get_random_return(env: Environment) -> None:
@@ -56,3 +93,42 @@ def test_calculate_optimal_strategy_and_expected_return(env: Environment):
     )
     assert optimal_allocation == 1
     assert expected_return == (1 + env.expected_risky_return()) ** env.total_turns
+
+
+def test_is_optimal_strategy_with_optimal_strategy(
+    env: Environment, state_action_dict_with_all_optimal_action: StateActionValueDict
+):
+    env.agent.state_action_value_dict = state_action_dict_with_all_optimal_action
+    assert env.is_optimal_strategy()
+
+
+def test_calculate_average_q_function_percent_diff(env: Environment):
+    optimal_state_action_value_dict = {}
+    possible_wealth_set = {1}
+    for turn in range(env.total_turns):
+        next_turn_possible_wealth_set = set()
+        for wealth in possible_wealth_set:
+            optimal_state_action_value_dict[(turn, wealth)] = {
+                0: wealth
+                * (1 + env.yield_r)
+                * (1 + env.expected_risky_return()) ** (env.total_turns - turn - 1),
+                1: wealth
+                * (1 + env.expected_risky_return()) ** (env.total_turns - turn),
+            }
+            next_turn_possible_wealth_set.add(wealth * (1 + env.yield_a))
+            next_turn_possible_wealth_set.add(wealth * (1 + env.yield_b))
+            next_turn_possible_wealth_set.add(wealth * (1 + env.yield_r))
+
+        possible_wealth_set = next_turn_possible_wealth_set
+    # print(optimal_state_action_value_dict)
+    assert (
+        env.calculate_max_q_function_percent_diff(optimal_state_action_value_dict)
+        < 1e-4
+    )
+
+
+def test_is_optimal_strategy_with_suboptimal_strategy(
+    env: Environment, state_action_dict_with_all_suboptimal_action: StateActionValueDict
+):
+    env.agent.state_action_value_dict = state_action_dict_with_all_suboptimal_action
+    assert not env.is_optimal_strategy()

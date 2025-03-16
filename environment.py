@@ -112,12 +112,15 @@ class Environment:
     def export_environment(self, filename: str):
         joblib.dump(self, filename)
 
-    def calculate_average_q_function_percent_diff(
+    def calculate_max_q_function_percent_diff(
         self, state_action_value_dict: StateActionValueDict
     ):
-        """Given a state action value dictionary, calculate the average percent difference
-        between the current Q function and the optimal Q function."""
-        _, optimal_return = self.calculate_optimal_strategy_and_expected_return()
+        """Given a state action value dictionary, calculate the average percent
+        difference between the current Q function and the optimal Q function."""
+        optimal_allocation, _ = self.calculate_optimal_strategy_and_expected_return()
+        expected_optimal_return = optimal_allocation * (
+            self.expected_risky_return()
+        ) + (1 - optimal_allocation) * (self.yield_r)
 
         percent_diff_arr = np.array([])  # [optimal q* - q] / optimal q*
 
@@ -129,7 +132,7 @@ class Environment:
                         allocation * (1 + self.expected_risky_return())
                         + (1 - allocation) * (1 + self.yield_r)
                     )
-                    * (1 + optimal_return) ** (self.total_turns - turn - 1)
+                    * (1 + expected_optimal_return) ** (self.total_turns - turn - 1)
                 )
 
                 percent_diff_arr = np.append(
@@ -137,4 +140,35 @@ class Environment:
                     [abs(optimal_q - expected_wealth) / optimal_q],
                 )
 
-        return cast(float, np.mean(percent_diff_arr))
+        if len(percent_diff_arr) == 0:
+            return 0
+
+        return cast(float, percent_diff_arr.max())
+
+    def is_optimal_strategy(
+        self,
+    ) -> bool:
+        optimal_strategy = self.calculate_optimal_strategy_and_expected_return()[0]
+
+        current_turn = 0
+        possible_state: set[float] = {1}  # initial wealth
+        next_turn_possible_state: set[float] = set()
+
+        while current_turn < self.total_turns:
+            state = possible_state.pop()
+
+            if (
+                self.agent.get_greedy_allocation(current_turn, state, mode="Prod")
+                == optimal_strategy
+            ):
+                next_turn_possible_state.add(state * (1 + self.yield_a))
+                next_turn_possible_state.add(state * (1 + self.yield_b))
+            else:
+                return False
+
+            if len(possible_state) == 0:
+                possible_state = next_turn_possible_state
+                next_turn_possible_state = set()
+                current_turn += 1
+
+        return True
