@@ -77,7 +77,7 @@ def test_simulate_run_with_all_greedy_calculation(
 
 
 def test_train_one_step(simple_environment, simple_single_run_internal_state):
-    new_state_action_value_dict = simple_single_run_internal_state.train_one_step(
+    new_state_action_value_dict, _, _ = simple_single_run_internal_state.train_one_step(
         mode="Test"
     )
     final_wealth = simple_single_run_internal_state.current_wealth

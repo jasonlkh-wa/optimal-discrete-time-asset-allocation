@@ -19,7 +19,14 @@ update, and to get the allocation of assets based on the Agent's policy.
 from typing import Optional
 from environment import Environment
 from agent import Agent
-from abstract_types import TurnNumber, Allocation, StateActionValueDict, Mode
+from abstract_types import (
+    TurnNumber,
+    Allocation,
+    StateActionValueDict,
+    Mode,
+    ActionValueDict,
+)
+import copy
 
 
 class State:
@@ -200,7 +207,9 @@ class SingleRunInternalState:
 
         return self.current_wealth
 
-    def backup_agent_from_turn_state_dict(self) -> StateActionValueDict:
+    def backup_agent_from_turn_state_dict(
+        self,
+    ) -> tuple[StateActionValueDict, float, bool]:
         """
         Back up the agent's state-action value dictionary using the TD update.
         This function is expected to return the new action value dictionary to be
@@ -223,7 +232,10 @@ class SingleRunInternalState:
             is selected greedily.
 
         Returns:
-            StateActionValueDict: The updated state-action value dictionary.
+            tuple[StateActionValueDict, float]:
+                StateActionValueDict: The updated state-action value dictionary.
+                float: the abs maximum percent difference between the old and new state action value dictionary
+                bool: is the policy stable
         """
 
         def get_reversed_turn_numbers(
@@ -232,6 +244,9 @@ class SingleRunInternalState:
             """Get a list of reversed turn numbers from the turn_state_dict."""
             return list(reversed(sorted(turn_state_dict.keys())))
 
+        original_state_action_value_dict = copy.deepcopy(
+            self.agent.state_action_value_dict
+        )
         state_action_value_dict = self.agent.state_action_value_dict
         turns = get_reversed_turn_numbers(self.turn_state_dict)
 
@@ -279,9 +294,115 @@ class SingleRunInternalState:
                     # skipping update as the next state is not selected greedily
                     continue
 
-        return state_action_value_dict
+        # Calculate the max percent difference between old and new state_value_dict
+        max_percent_diff: float = (
+            self.calcualte_max_percent_diff_between_state_action_value_dict(
+                state_action_value_dict, original_state_action_value_dict
+            )
+        )
 
-    def train_one_step(self, mode: Mode) -> StateActionValueDict:
+        # Evaluate if the policy is stable
+        is_policy_stable = self.is_policy_stable(
+            state_action_value_dict, original_state_action_value_dict
+        )
+
+        return state_action_value_dict, max_percent_diff, is_policy_stable
+
+    @staticmethod
+    def calcualte_max_percent_diff_between_state_action_value_dict(
+        state_action_value_dict: StateActionValueDict,
+        original_state_action_value_dict: StateActionValueDict,
+    ) -> float:
+        """
+        Calculate the maximum percent difference between the old and new state-action value dictionaries.
+
+        Args:
+            state_action_value_dict (StateActionValueDict): The new state-action value dictionary.
+            original_state_action_value_dict (StateActionValueDict): The old state-action value dictionary.
+
+        Returns:
+            float: The maximum percent difference between the old and new state-action value dictionaries.
+        """
+        max_percent_diff: float = 0
+        for key in state_action_value_dict.keys():
+            if key not in original_state_action_value_dict:
+                max_percent_diff = (
+                    float(
+                        "inf"
+                    )  # the dictionary is not stable, we return inf for the max_diff
+                )
+                break
+            for action in state_action_value_dict[key].keys():
+                if action not in original_state_action_value_dict[key]:
+                    max_percent_diff = (
+                        float(
+                            "inf"
+                        )  # the dictionary is not stable, we return inf for the max_diff
+                    )
+
+                    break
+                # We use percent diff to normalize the wealth level difference
+                max_percent_diff = max(
+                    max_percent_diff,
+                    abs(
+                        original_state_action_value_dict[key][action]
+                        - state_action_value_dict[key][action]
+                    )
+                    / original_state_action_value_dict[key][action]
+                    if original_state_action_value_dict[key][action] != 0
+                    else float("inf"),
+                )
+        return max_percent_diff
+
+    @staticmethod
+    def is_policy_stable(
+        state_action_value_dict: StateActionValueDict,
+        original_state_action_value_dict: StateActionValueDict,
+    ) -> bool:
+        """
+        Evaluate if the policy is stable.
+
+        Args:
+            state_action_value_dict: The new state-action value dictionary after the backup.
+            original_state_action_value_dict: The original state-action value dictionary before the backup.
+
+        Returns:
+            bool: True if the policy is stable, False otherwise.
+        """
+
+        def max_value_action(action_value_dict: ActionValueDict) -> float:
+            max_allocation = list(action_value_dict.keys())[0]
+            max_value = -float("inf")
+            for allocation, value in action_value_dict.items():
+                if value > max_value:
+                    max_value = value
+                    max_allocation = allocation
+            return max_allocation
+
+        is_policy_stable = True
+        for key in state_action_value_dict.keys():
+            for action in state_action_value_dict[key].keys():
+                if (
+                    key not in original_state_action_value_dict.keys()
+                    or action not in original_state_action_value_dict[key].keys()
+                ):
+                    is_policy_stable = False
+                    break
+
+                if (
+                    max_value_action(
+                        state_action_value_dict[key],
+                    )  # type: ignore
+                    != max_value_action(
+                        original_state_action_value_dict[key],
+                    )
+                ):
+                    is_policy_stable = False
+                    break
+
+        return is_policy_stable
+
+    def train_one_step(self, mode: Mode) -> tuple[StateActionValueDict, float, bool]:
         """Train the agent for one step in the environment.
         Runs the environment for one step, and then back up the agent's state-action
 

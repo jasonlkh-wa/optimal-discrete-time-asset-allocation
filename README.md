@@ -103,10 +103,14 @@ Considering time to run all tests, we would run all benchmark analysis on cases
 with total turns = 2 / 3 / 5, and 2 set of yield combinations to show the
 algorithm can adapt to different environment.
 
-Lastly, we would add a test for total turns = 10, but we'd only compare if it
-can reach the optimal policy given the run time constraint. Note that you could
-still verify by running the [main.py] manually to see the performance of other
-benchmarks in realtime plots.
+Lastly, we have a test run for total turns = 10 as well. However, given the
+solution is validated in different timestep and environment combinations, we'd
+comment out the tests with T=10 by default to avoid long test module runtime.
+
+Note that it's recommended to validate high timestep environment by running the
+[main.py] manually to see the performance of the benchmarks in realtime plots,
+since the main script allows more control over the hyperparameters. It shows the
+[average optimal action selected] of the current policy.
 
 ## How to run the training
 

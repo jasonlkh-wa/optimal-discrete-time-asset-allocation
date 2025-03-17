@@ -166,7 +166,7 @@ class Environment:
     def export_environment(self, filename: str) -> None:
         joblib.dump(self, filename)
 
-    def calculate_max_q_function_percent_diff(
+    def calculate_avg_q_function_percent_diff(
         self, state_action_value_dict: StateActionValueDict
     ) -> float:
         """Calculates the average percent difference between the current Q function and the optimal Q function.
@@ -205,7 +205,7 @@ class Environment:
         if len(percent_diff_arr) == 0:
             return 1  # if state_action_value_dict is empty, return 1 as a dummy value
 
-        return cast(float, percent_diff_arr.max())
+        return cast(float, percent_diff_arr.mean())
 
     def is_optimal_strategy(
         self,

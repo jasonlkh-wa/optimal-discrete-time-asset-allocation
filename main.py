@@ -1,5 +1,3 @@
-# CR kleung: make test cases of t=2,3,4 for showing the algo works, use stable V (0.05) and stable policy to proof
-# CR kleung: test is ~100% coverage, do documentation and readme
 from environment import Environment
 import click
 from single_run_internal_state import SingleRunInternalState
@@ -248,9 +246,9 @@ def main(
         update_ax_properties(
             axes_dict["q_function_diff_ax"],
             x_label="Epoch",
-            y_label="Max percent difference",
+            y_label="Average percent difference",
             title=wrap_title(
-                "Max percent difference of Q function against Q* function over epochs",
+                "Average percent difference of Q function against Q* function over epochs",
                 width=40,
             ),
         )
@@ -273,6 +271,8 @@ def main(
         epsilon_values = []
 
     epoch = 0
+    max_state_action_value_dict_diff: Optional[float] = None
+    is_policy_stable: Optional[bool] = None
     while True:
         # If [n_epoch] is not defined, train agent until reaching the optimal
         # strategy, i.e. selecting the optimal action at every turn greedily
@@ -280,15 +280,17 @@ def main(
             break
 
         logger.info(
-            f"{print_utils.rule}\nEpoch: {epoch} {epsilon=} {alpha=} {environment.calculate_max_q_function_percent_diff(environment.agent.state_action_value_dict)=}"
+            f"{print_utils.rule}\nEpoch: {epoch} {epsilon=} {alpha=} {environment.calculate_avg_q_function_percent_diff(environment.agent.state_action_value_dict)=}"
         )
         environment.agent.debug_state_action_value_dict()
         single_run_internal_state = SingleRunInternalState(environment=environment)
 
         if not disable_train:
-            environment.agent.state_action_value_dict = (
-                single_run_internal_state.train_one_step(mode="Prod")
-            )
+            (
+                environment.agent.state_action_value_dict,
+                max_state_action_value_dict_diff,
+                is_policy_stable,
+            ) = single_run_internal_state.train_one_step(mode="Prod")
 
         if not disable_simulation:
             try:
@@ -348,7 +350,7 @@ def main(
 
             # Update optimal action count plot
             q_function_diffs.append(
-                environment.calculate_max_q_function_percent_diff(
+                environment.calculate_avg_q_function_percent_diff(
                     environment.agent.state_action_value_dict
                 )
             )
@@ -381,7 +383,7 @@ def main(
         epoch += 1
 
         logger.info(
-            f"{environment.calculate_max_q_function_percent_diff(environment.agent.state_action_value_dict)=}"
+            f"{environment.calculate_avg_q_function_percent_diff(environment.agent.state_action_value_dict)=} "
         )
 
     # Show final graph to avoid realtime graph closing automatically
@@ -389,6 +391,14 @@ def main(
         plt.ioff()
         plt.show()
 
+    if not disable_train:
+        if (
+            max_state_action_value_dict_diff is not None
+            and is_policy_stable is not None
+        ):
+            logger.info(
+                f"Last q function update diff: {max_state_action_value_dict_diff=} {is_policy_stable=}"
+            )
     # Export environment
     environment.export_environment(
         f"./data/env_{datetime.datetime.today().strftime('%Y%m%d')}_{time.time()}_total_turns_{environment.total_turns}.joblib"
