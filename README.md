@@ -5,6 +5,12 @@
 It's recommended to go to the [Approach to evaluate the solution] section to
 look for the final solution and proof of the solution.
 
+While [main.py] is the full script to run, it contains a lot of plotting logics.
+To verify the TD-0 related logic, [agent.py], [environment.py] and
+[single_run_internal_state.py] contains most of the logic training the agent.
+[SingleRunInternalState.train_one_step()] is the entry point of the training
+logic.
+
 ## Introduction
 
 This project is to solve the Optimal Discrete-Time Asset Allocation problem
