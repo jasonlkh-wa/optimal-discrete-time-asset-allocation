@@ -52,8 +52,10 @@ evaluate and verify the result.
 ### Theoretical optimal solution
 
 Considering total timestep = 1, the expected return is given by
-$$E(R) = allocation * E(R_{risky}) + (1-allocation) * yield_r$$
-$$E(R_{risky}) = p * yield_a + (1-p) * yield_b$$  
+
+$$E(R) = allocation * E(R_{risky}) + (1-allocation) * yield_r$$  
+$$E(R_{risky}) = p * yield_a + (1-p) * yield_b$$
+
 Since E(risky) and E(riskless) = $yield_r$ are static within the environment. To
 maximize the return, we would allocate all wealth to risky or riskless asset for
 the one with higher expected return.
